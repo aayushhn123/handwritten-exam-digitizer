@@ -1,0 +1,7 @@
+{
+  "student_id": "23D001",
+  "answers": [
+    {"question": "Q1", "answer_text": "sample ground truth answer text goes here"},
+    {"question": "Q2", "answer_text": "another sample ground truth answer goes here"}
+  ]
+}
