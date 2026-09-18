@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+data/raw_scans/*
+data/preprocessed/*
+!data/raw_scans/.gitkeep
+!data/preprocessed/.gitkeep
+data/split.json
+.DS_Store
