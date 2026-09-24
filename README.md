@@ -48,15 +48,47 @@ handwritten-exam-digitizer/
     preprocessed/       cleaned images after preprocessing
     ground_truth/       manually transcribed labels, one JSON per page
   src/
-    preprocess.py        image cleaning and deskewing
-    segment.py            question segmentation
-    baseline_ocr.py       Tesseract OCR baseline
-    make_split.py         train/test split
-    evaluate.py            CER and WER evaluation
-    run_pipeline.py        runs the full pipeline end to end
+    preprocess.py          image cleaning and deskewing
+    segment.py              question segmentation (regex-based)
+    baseline_ocr.py         Tesseract OCR baseline
+    ner_extractor.py         spaCy NER component (student ID, question number, marks)
+    process_with_ner.py      full page pipeline using NER instead of plain regex
+    evaluate_ner.py           precision/recall/F1 for the NER component
+    make_split.py            train/test split
+    evaluate.py               CER and WER evaluation
+    run_pipeline.py           runs the full pipeline end to end
   results/               evaluation outputs get saved here
   requirements.txt
 ```
+
+## Week 3 — Core NLP component (NER)
+
+The Week 1-2 baseline used plain regex matching to find question markers
+("Q1", "Q2") in the OCR text. Week 3 replaces that with a proper Named
+Entity Recognition component built on spaCy's `EntityRuler`, which extracts:
+
+- `STUDENT_ID` — e.g. 23D001
+- `QUESTION_NUM` — e.g. Q1, Q2
+- `MARKS` — e.g. 7/10
+- `PAGE_NUM` — e.g. "Page 4"
+
+Run it with:
+
+```
+python -m spacy download en_core_web_sm
+cd src
+python process_with_ner.py
+```
+
+Evaluate NER quality against a small hand-labeled sample with:
+
+```
+python evaluate_ner.py
+```
+
+This is the rule-based version of the NER component. The Week 4 improved
+approach will compare this against spaCy's statistical/transformer-based
+NER model.
 
 ## How to run
 
