@@ -3,3 +3,4 @@ pytesseract
 pillow
 jiwer
 scikit-learn
+spacy
