@@ -1,0 +1,9 @@
+{
+  "student_id": "E007",
+  "answers": [
+    {
+      "question": "Q1",
+      "answer_text": "ISP Assignment 3 - E007 Aayush Nayak Q1. OSI Model in Email Sending and Receiving In the OSI (Open Systems Interconnection) Model, email communication follows a specific path through the layers, with each layer contributing to efficient data exchange. Here's how email typically moves through each OSI layer: 1. Application Layer (Layer 7): This layer interacts with email applications (e.g., Gmail, Outlook) using protocols like SMTP (Simple Mail Transfer Protocol) for sending and IMAP/POP3 for receiving emails. Users compose an email, and the email application prepares it for transfer over t he network. 2. Presentation Layer (Layer 6): This layer converts data into a format suitable for the application layer, handling encryption and compression. It ensures"
+    }
+  ]
+}

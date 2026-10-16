@@ -11,6 +11,7 @@ def build_ner_pipeline():
 
     patterns = [
         {"label": "STUDENT_ID", "pattern": [{"TEXT": {"REGEX": "^[0-9]{2}[A-Za-z][0-9]{3,4}$"}}]},
+        {"label": "STUDENT_ID", "pattern": [{"TEXT": {"REGEX": "^[A-Za-z][0-9]{3}$"}}]},
         {"label": "QUESTION_NUM", "pattern": [{"TEXT": {"REGEX": "^[Qq][0-9]{1,2}[\\.\\):]?$"}}]},
         {"label": "MARKS", "pattern": [{"TEXT": {"REGEX": "^[0-9]{1,2}/[0-9]{1,2}$"}}]},
         {"label": "PAGE_NUM", "pattern": [{"LOWER": "page"}, {"IS_DIGIT": True}]},

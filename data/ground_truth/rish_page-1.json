@@ -1,0 +1,9 @@
+{
+  "student_id": "E013",
+  "answers": [
+    {
+      "question": "Q1",
+      "answer_text": "DOMS Page No. Date / / Name - Rish R Patil Subject - ISP Roll no - E013 Year - 3rd Date - 5/11/2024 Q1) OSI Model and email sending / Receiving process. Ans In The OSI Model defines Seven layers , with each with specific responsibilities in data Communications. Email, as a process, moves through these layers, encapsulating data at each step, which is then de-encapsulated on the recieving end. 1] Application layer (Layer 7): a) Email applications (gmail, outlook). interact with the network at this layer. b) Protocols : SMTP (Simple Mail Transfer Protocol) For sending emails , IMAP (Internet Message Access Protocol) for receiving. c) The application layer takes the email message, subject and attachments from the user and prepares them for transmission by encoding the data in the correct format 2] Presentation Layer (Layer 6):- a) This layer translates data into a standard format that both sender and receiver applications can interpret . b) Functions: Data encryption , decryption Compression; and character encoding c) Example:- IF the email contains attachments , the presentation layer ensures these are correctly encoded (eg. ASCII Or binary) For compatibility On both ends."
+    }
+  ]
+}

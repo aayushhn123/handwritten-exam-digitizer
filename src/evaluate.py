@@ -1,49 +1,61 @@
 import json
 import os
 import jiwer
-from baseline_ocr import run_tesseract_baseline
+import pytesseract
+from PIL import Image
 
 
 def load_ground_truth_text(ground_truth_folder, filename):
-    json_name = filename.replace(".jpg", ".json").replace(".png", ".json")
-    json_path = os.path.join(ground_truth_folder, json_name)
+    base_name = os.path.splitext(filename)[0]
+    json_path = os.path.join(ground_truth_folder, base_name + ".json")
     with open(json_path) as f:
         gt = json.load(f)
-    combined = " ".join([a["answer_text"] for a in gt["answers"]])
+    combined = " ".join(a["answer_text"] for a in gt["answers"])
     return combined
 
 
-def evaluate_baseline(test_files, preprocessed_folder, ground_truth_folder):
-    all_cer = []
-    all_wer = []
+def run_ocr(image_path):
+    img = Image.open(image_path)
+    raw_text = pytesseract.image_to_string(img)
+    return " ".join(raw_text.split())
 
-    for filename in test_files:
-        image_path = os.path.join(preprocessed_folder, filename)
-        predicted_text, confidence = run_tesseract_baseline(image_path)
-        ground_truth_text = load_ground_truth_text(ground_truth_folder, filename)
 
-        if ground_truth_text.strip() == "":
+def evaluate_folder(image_folder, ground_truth_folder):
+    results = []
+
+    for filename in sorted(os.listdir(image_folder)):
+        if not filename.endswith((".jpg", ".png", ".jpeg")):
+            continue
+
+        image_path = os.path.join(image_folder, filename)
+        predicted_text = run_ocr(image_path)
+
+        try:
+            ground_truth_text = load_ground_truth_text(ground_truth_folder, filename)
+        except FileNotFoundError:
+            print("no ground truth for", filename, "- skipping")
             continue
 
         cer = jiwer.cer(ground_truth_text, predicted_text)
         wer = jiwer.wer(ground_truth_text, predicted_text)
 
-        all_cer.append(cer)
-        all_wer.append(wer)
+        results.append({
+            "file": filename,
+            "cer": round(cer, 3),
+            "wer": round(wer, 3)
+        })
 
         print(filename, "CER:", round(cer, 3), "WER:", round(wer, 3))
 
-    avg_cer = sum(all_cer) / len(all_cer)
-    avg_wer = sum(all_wer) / len(all_wer)
+    if results:
+        avg_cer = sum(r["cer"] for r in results) / len(results)
+        avg_wer = sum(r["wer"] for r in results) / len(results)
+        print("\nAverage CER:", round(avg_cer, 3))
+        print("Average WER:", round(avg_wer, 3))
 
-    print("\nAverage CER:", round(avg_cer, 3))
-    print("Average WER:", round(avg_wer, 3))
-
-    return avg_cer, avg_wer
+    return results
 
 
 if __name__ == "__main__":
-    with open("data/split.json") as f:
-        split_info = json.load(f)
-
-    evaluate_baseline(split_info["test"], "data/preprocessed", "data/ground_truth")
+    print("evaluating raw scans (no preprocessing)")
+    evaluate_folder("data/raw_scans", "data/ground_truth")

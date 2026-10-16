@@ -3,29 +3,28 @@
 SNLP Course Project 2026 — AI University: Building Reusable NLP Assets
 Group 1 — Roll Numbers E001, E002, E004, E005, E007
 
-## Problem
-
-University examinations are still largely handwritten on paper. Before any
-automated evaluation of descriptive answers can happen, the handwritten
-answer sheets need to be converted into structured, machine-readable text.
-This project builds that conversion pipeline.
-
 ## What this does
 
-Takes a scanned handwritten examination answer sheet and produces a
-structured, question-wise digital transcription.
+Takes a scanned or photographed handwritten examination answer sheet and
+produces a structured, question-wise digital transcription.
 
-Input: scanned answer sheet (image or PDF page)
+```python
+from digitizer import digitize_page
+
+result = digitize_page("scans/page_004.jpg", page_number=4)
+```
 
 Output:
 
 ```json
 {
-  "student_id": "23D001",
-  "question": "Q3",
+  "student_id": "E007",
+  "question": "Q1",
   "answer_text": "...",
   "page": 4,
-  "confidence": 0.91
+  "marks_detected": null,
+  "ocr_confidence": 0.54,
+  "entities_found": [...]
 }
 ```
 
@@ -34,28 +33,23 @@ Output:
 ```
 handwritten-exam-digitizer/
   data/
-    raw_scans/              scanned answer sheet images
+    raw_scans/              scanned/photographed answer sheet images
     preprocessed/            cleaned images after preprocessing
     ground_truth/            manually transcribed labels, one JSON per page
   src/
     preprocess.py              image cleaning and deskewing                 (Week 1-2)
     segment.py                  regex-based question segmentation            (Week 1-2)
     baseline_ocr.py             Tesseract OCR baseline                       (Week 1-2)
-    make_split.py               train/test split                            (Week 1-2)
-    evaluate.py                  CER and WER evaluation                       (Week 1-2)
-    run_pipeline.py              full baseline pipeline runner                (Week 1-2)
+    evaluate.py                  CER and WER evaluation                       (Week 1-2, updated)
     ner_extractor.py            spaCy rule-based NER component                (Week 3)
-    process_with_ner.py          OCR + NER combined page processor            (Week 3)
-    evaluate_ner.py               NER precision/recall/F1 evaluation          (Week 3)
-    ner_improved.py              OCR-noise tolerant, multi-candidate NER       (Week 4, new)
-    compare_ner_approaches.py    baseline vs improved NER comparison           (Week 4, new)
+    ner_improved.py              OCR-noise tolerant, multi-candidate NER       (Week 4)
+    compare_ner_approaches.py   baseline vs improved NER comparison            (Week 4)
+    digitizer.py                 reusable digitize_page() asset                (Week 6, new)
   results/                   evaluation outputs
   requirements.txt
 ```
 
 ## How to run
-
-Install dependencies:
 
 ```
 pip install -r requirements.txt
@@ -68,71 +62,63 @@ Tesseract also needs to be installed on the system:
 sudo apt-get install tesseract-ocr
 ```
 
-Put scanned pages in `data/raw_scans/` and matching ground-truth JSON files
-in `data/ground_truth/`, then run the baseline pipeline:
+Evaluate OCR quality against ground truth:
 
 ```
 cd src
-python run_pipeline.py
+python evaluate.py
 ```
 
-## Week 3 — Core NLP component (rule-based NER)
+## Week 5 — Evaluation and error analysis
 
-Replaces plain regex question-marker detection with a proper Named Entity
-Recognition component built on spaCy's EntityRuler, extracting STUDENT_ID,
-QUESTION_NUM, MARKS and PAGE_NUM from OCR text.
+Weeks 1-4 used short hand-built text snippets to test the pipeline, since
+real scanned pages were still being collected. Week 5 runs the pipeline on
+real handwritten answer sheets (photographed, not clean digital scans) and
+reports real CER/WER plus a documented set of real failure cases, including
+a genuine, previously unknown issue: the Week 1-2 preprocessing step
+(adaptive thresholding and deskewing) made OCR accuracy worse, not better,
+on photographed notebook pages, because it over-binarizes ruled lines so
+they visually merge with letters sitting on them. See the full submission
+document for the complete error analysis table.
 
-```
-cd src
-python process_with_ner.py
-python evaluate_ner.py
-```
+## Week 6 — Asset engineering
 
-## Week 4 — Improved approach (OCR-noise tolerant NER)
+The pipeline is now wrapped as a single reusable function in
+`src/digitizer.py`:
 
-The Week 3 rule-based extractor takes the single first match per entity
-label and has no tolerance for common OCR misreads (O read as 0, l read as
-1, and so on). Week 4 introduces an improved extractor that:
+```python
+from digitizer import digitize_page
 
-- normalizes common OCR character confusions within digit runs
-  (O/o to 0, l/I to 1, S to 5, B to 8)
-- finds every candidate match per label, not just the first one
-- ranks and selects the best candidate per label by position
-
-Run the comparison between the Week 3 baseline and the Week 4 improved
-approach on the same evaluation set:
-
-```
-cd src
-python compare_ner_approaches.py
+result = digitize_page(image_path, page_number=None, use_improved_ner=True)
 ```
 
-This prints precision, recall and F1 for both approaches side by side.
-
-## Why this is the improved approach, not a different one
-
-A genuinely new NER model (statistical or transformer-based) needs a
-reasonably sized hand-labeled dataset to train on, which is not yet
-available for this project since real scanned answer sheets are still
-being collected. Instead of fitting a flashy but under-trained model, Week
-4 focuses on a real, verifiable weakness in the Week 3 baseline (OCR noise
-on handwritten-adjacent text) and fixes it directly, with before/after
-numbers to show it. A statistical or transformer-based NER model remains
-the planned Week 5+ direction once enough labeled real scans exist.
+- Structured input: one image path, with optional page number and a toggle
+  between the Week 3 and Week 4 NER approaches.
+- Structured output: a dict with `student_id`, `question`, `answer_text`,
+  `page`, `marks_detected`, `ocr_confidence`, and the full list of entity
+  candidates found (`entities_found`), for manual review of low-confidence
+  pages.
+- Confidence scores: `ocr_confidence` is Tesseract's own average per-word
+  confidence for the page, so a caller (such as Group 2's AI Exam Grader)
+  can decide whether to trust a page automatically or flag it for a human
+  to check.
+- Full docstring in the function itself (`help(digitize_page)` after
+  importing it).
 
 ## Reusability — how another group can use this
 
 ```python
-from process_with_ner import process_page_with_ner
+from digitizer import digitize_page
 
-result = process_page_with_ner("data/preprocessed/page_004.jpg", 4)
+result = digitize_page("data/preprocessed/page_004.jpg", page_number=4)
 ```
 
-This returns a structured record in the JSON format shown above. Group 2
-(AI Exam Grader) can consume this directly as their input.
+Group 2 (AI Exam Grader) can consume this directly as their input.
 
 ## Status
 
 Pipeline code (OCR baseline, rule-based NER, OCR-noise-tolerant improved
-NER) is complete and runnable. Real scanned data collection is in
-progress.
+NER, reusable digitize_page asset) is complete and has been run on real
+handwritten pages, not only synthetic text samples. Further real data
+collection from the rest of the group is in progress for a larger
+evaluation set.

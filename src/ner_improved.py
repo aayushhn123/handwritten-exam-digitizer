@@ -17,14 +17,14 @@ def clean_digit_run(run):
 
 def find_student_id_candidates(text):
     candidates = []
-    pattern = r"\b([0-9OolIS]{2})([A-Za-z])([0-9OolIS]{3,4})\b"
-    for match in re.finditer(pattern, text):
+
+    pattern_numeric_prefix = r"\b([0-9OolIS]{2})([A-Za-z])([0-9OolIS]{3,4})\b"
+    for match in re.finditer(pattern_numeric_prefix, text):
         raw = match.group()
         prefix_digits = clean_digit_run(match.group(1))
         letter = match.group(2)
         suffix_digits = clean_digit_run(match.group(3))
         cleaned = prefix_digits + letter + suffix_digits
-
         if re.match(r"^[0-9]{2}[A-Za-z][0-9]{3,4}$", cleaned):
             candidates.append({
                 "text": cleaned,
@@ -33,6 +33,28 @@ def find_student_id_candidates(text):
                 "start_char": match.start(),
                 "end_char": match.end()
             })
+
+    # requires at least one real digit (0-9) in the three characters after the
+    # letter, so an ordinary word like "Roll" (letter + three plain letters,
+    # with no digit anywhere) is never matched, while real OCR noise such as
+    # "E0I3" (a mix of real digits and look-alike letters) still is
+    pattern_letter_prefix = r"\b([A-Za-z])([0-9OolIS]{3})\b"
+    for match in re.finditer(pattern_letter_prefix, text):
+        raw = match.group()
+        letter = match.group(1)
+        raw_digits_part = match.group(2)
+        has_real_digit = any(ch.isdigit() for ch in raw_digits_part)
+        if not has_real_digit:
+            continue
+        cleaned = letter.upper() + clean_digit_run(raw_digits_part)
+        candidates.append({
+            "text": cleaned,
+            "original_text": raw,
+            "label": "STUDENT_ID",
+            "start_char": match.start(),
+            "end_char": match.end()
+        })
+
     return candidates
 
 
