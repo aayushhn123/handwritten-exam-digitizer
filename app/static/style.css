@@ -244,7 +244,7 @@ textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--acce
 .step details li { margin: 4px 0; }
 .example { margin-top: 10px; font: 12.5px/1.6 var(--mono); background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; white-space: pre-wrap; color: var(--ink-2); }
 
-.timeline { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+.timeline { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; }
 .tl { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; position: relative; }
 .tl .w { font-size: 12px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; }
 .tl b { display: block; margin: 4px 0 6px; font-size: 15px; }
@@ -354,3 +354,8 @@ li:not(.collapsed) > .node .car { transform: rotate(90deg); }
   .step { grid-template-columns: 1fr; }
   .md { padding: 16px; }
 }
+
+/* ---------- week 7 additions ---------- */
+.segmented.sm button { padding: 4px 9px; font-size: 12px; }
+.card-head .segmented.sm { margin-left: auto; }
+.callout p + p { margin-top: 8px; }

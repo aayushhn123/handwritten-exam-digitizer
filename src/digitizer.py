@@ -1,7 +1,6 @@
-import pytesseract
-from PIL import Image
 from ner_extractor import build_ner_pipeline, extract_entities
 from ner_improved import extract_entities_improved
+from ocr_pipeline import correct_spelling, ocr_page
 
 
 _shared_nlp = None
@@ -14,7 +13,8 @@ def _get_shared_nlp():
     return _shared_nlp
 
 
-def digitize_page(image_path, page_number=None, use_improved_ner=True):
+def digitize_page(image_path, page_number=None, use_improved_ner=True,
+                  enhance=True, spell_correct=False):
     """
     Runs the full handwritten-exam-digitizer pipeline on one scanned answer
     sheet image and returns a single structured record for it.
@@ -33,6 +33,15 @@ def digitize_page(image_path, page_number=None, use_improved_ner=True):
             OCR-noise-tolerant NER extractor. If False, uses the Week 3
             plain rule-based extractor instead. Exposed mainly so the two
             approaches can be compared by callers that want to.
+        enhance (bool): if True (default), runs the Week 7 image
+            enhancement before OCR (red channel, lighting correction,
+            straightening, ruled-line removal, 1.5x upscale) and cleans rule
+            debris from the text. If False, Tesseract reads the image as-is,
+            which is the original Week 1-6 behaviour.
+        spell_correct (bool): if True, fixes misspelt lower-case words in
+            answer_text with a dictionary. Off by default because it also
+            "fixes" the student's own spelling mistakes. Entities are always
+            extracted from the uncorrected text.
 
     Returns
         dict with the following keys:
@@ -60,7 +69,7 @@ def digitize_page(image_path, page_number=None, use_improved_ner=True):
         >>> result["student_id"]
         'E007'
     """
-    raw_text, ocr_confidence = _run_ocr_with_confidence(image_path)
+    raw_text, ocr_confidence = ocr_page(image_path, enhance=enhance)
 
     if use_improved_ner:
         all_entities, best_by_label = extract_entities_improved(raw_text)
@@ -77,26 +86,19 @@ def digitize_page(image_path, page_number=None, use_improved_ner=True):
     question_num = best_by_label.get("QUESTION_NUM", {}).get("text")
     marks = best_by_label.get("MARKS", {}).get("text")
 
+    answer_text = raw_text.strip()
+    if spell_correct:
+        answer_text = correct_spelling(answer_text)
+
     return {
         "student_id": student_id,
         "question": question_num,
-        "answer_text": raw_text.strip(),
+        "answer_text": answer_text,
         "page": page_number,
         "marks_detected": marks,
         "ocr_confidence": ocr_confidence,
         "entities_found": all_entities,
     }
-
-
-def _run_ocr_with_confidence(image_path):
-    img = Image.open(image_path)
-    text = pytesseract.image_to_string(img)
-
-    data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
-    confidences = [int(c) for c in data["conf"] if c != "-1"]
-    avg_confidence = sum(confidences) / len(confidences) / 100 if confidences else 0.0
-
-    return text, round(avg_confidence, 2)
 
 
 if __name__ == "__main__":

@@ -63,6 +63,22 @@ if __name__ == "__main__":
     print("recall:", round(improved_recall, 3))
     print("f1:", round(improved_f1, 3))
 
+    # Week 7: strings copied from real Tesseract output on the photographed
+    # answer sheets, where the OCR itself garbled the labels
+    real_ocr_cases = [
+        ("QL OS! Model in Email Sending and Recening", [("Q1", "QUESTION_NUM")]),
+        ("@1) 05t Mode) and email. ganding Receiving", [("Q1", "QUESTION_NUM")]),
+        ("Roll no - EO13 Year - 3rd Date - 5/11/2024", [("E013", "STUDENT_ID")]),
+        ("Roll no: E0I3 Q2) marks 6/1O", [("E013", "STUDENT_ID"), ("Q2", "QUESTION_NUM"), ("6/10", "MARKS")]),
+        ("Q3] answer Roll call was fine", [("Q3", "QUESTION_NUM")]),
+    ]
+    print("\nreal OCR noise (week 7 test set)")
+    real_baseline = evaluate_baseline(nlp, real_ocr_cases)
+    real_improved = evaluate_improved(real_ocr_cases)
+    print("metric      baseline   improved")
+    for name, b, i in zip(["precision", "recall", "f1"], real_baseline, real_improved):
+        print(f"{name:11s} {round(b, 3):<10} {round(i, 3)}")
+
     print("\nsummary")
     print("metric      baseline   improved")
     print("precision  ", round(baseline_precision, 3), "    ", round(improved_precision, 3))

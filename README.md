@@ -45,6 +45,7 @@ handwritten-exam-digitizer/
     ner_improved.py              OCR-noise tolerant, multi-candidate NER       (Week 4)
     compare_ner_approaches.py   baseline vs improved NER comparison            (Week 4)
     digitizer.py                 reusable digitize_page() asset                (Week 6, new)
+    ocr_pipeline.py              image enhancement + text clean-up for OCR     (Week 7, new)
   results/                   evaluation outputs
   app/                       web UI (Flask server + HTML/CSS/JS)
     server.py                 upload, PDF -> page images, calls digitize_page()
@@ -136,6 +137,56 @@ result = digitize_page(image_path, page_number=None, use_improved_ner=True)
   to check.
 - Full docstring in the function itself (`help(digitize_page)` after
   importing it).
+
+## Week 7 — Accuracy improvements
+
+The Week 5 finding (thresholding hurts photographed ruled pages) led to a new
+OCR front end, `src/ocr_pipeline.py`, now used by `digitize_page()` by
+default:
+
+1. read the red colour channel only (pink/red rules vanish, ink stays dark)
+2. divide out uneven lighting (shadows, phone-photo gradients)
+3. straighten the page using the angle of the ruled lines
+4. erase the ruled lines without hard black/white thresholding
+5. upscale 1.5x, then Tesseract (`--psm 4`)
+6. strip rule debris (`____`, `—`, `|`) from the text
+7. optional dictionary spelling correction (off by default, because it also
+   "fixes" the student's own spelling; never touches names, IDs or acronyms)
+
+| Page (CER / WER)  | Original OCR      | Week 7            |
+|-------------------|-------------------|-------------------|
+| aayush_page-01    | 0.397 / 0.490     | 0.037 / 0.163     |
+| rish_page-1       | 0.455 / 0.964     | 0.341 / 0.969     |
+| Average           | 0.426 / 0.727     | 0.189 / 0.566     |
+
+Run `python src/evaluate.py` to reproduce both columns. About one second
+per page.
+
+`data/ground_truth/aayush_page-01.json` was also completed: it previously
+stopped mid-page, so correctly read text after that point was counted as
+errors.
+
+Also tried and rejected (measured on the same pages):
+
+- Microsoft TrOCR (transformer trained on handwriting): similar accuracy
+  (CER 0.052 neat / 0.37 cursive) but 3-5 minutes per page on CPU.
+- OCR line by line (`--psm 7`): worse (CER 0.21+ on the neat page).
+- Tesseract `tessdata_best` model: no better, twice as slow.
+
+NER (`ner_improved.py`) now also handles real OCR mistakes seen on these
+pages: `QL.` -> Q1, `@1)` at the start of a line -> Q1, an ID straight after
+"Roll no" / "ID" even with no real digit (`EO13` -> E013), and dates such as
+5/11/2024 are no longer read as marks. `compare_ner_approaches.py` reports a
+separate test set of these cases (F1 0.308 for Week 3, 1.0 now; the set is
+small and comes from the same pages the rules were written for).
+
+Known limit: Tesseract still misreads some handwritten IDs entirely (E007
+-> "Eool", E013 -> "Ford"), so `student_id` can be `None` on cursive pages.
+
+```python
+result = digitize_page(path, enhance=True, spell_correct=False)  # defaults
+result = digitize_page(path, enhance=False)  # original Week 1-6 behaviour
+```
 
 ## Reusability — how another group can use this
 

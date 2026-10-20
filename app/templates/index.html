@@ -73,10 +73,20 @@
             </div>
           </div>
           <div class="opt-row">
-            <div class="opt-label">Clean image first
-              <div class="opt-note">Our Week 5 tests found this <em>hurts</em> accuracy on phone photos of ruled paper. Off by default.</div>
+            <div class="opt-label">Image enhancement
+              <div class="opt-note"><b>Smart</b> removes coloured rules, shadows and ruled lines before OCR. It cut our character error rate from 43% to 19%.</div>
             </div>
-            <label class="switch"><input type="checkbox" id="preprocess"><span></span></label>
+            <div class="segmented" id="enhance">
+              <button data-val="smart" class="on">Smart (Week 7)</button>
+              <button data-val="raw">None</button>
+              <button data-val="legacy" title="Week 1-2 adaptive threshold + deskew">Threshold (Wk 1-2)</button>
+            </div>
+          </div>
+          <div class="opt-row">
+            <div class="opt-label">Auto-correct spelling
+              <div class="opt-note">Fixes OCR slips like “protess” → “process”. Off by default: it would also correct the student's own spelling mistakes.</div>
+            </div>
+            <label class="switch"><input type="checkbox" id="spell"><span></span></label>
           </div>
           <div class="opt-row">
             <div class="opt-label">PDF render quality</div>
@@ -101,7 +111,7 @@
         <ol id="liveSteps" class="live-steps">
           <li data-stage="upload"><span class="ls-dot"></span><div><b>Upload</b><span>Your file is sent to the local server</span></div></li>
           <li data-stage="render"><span class="ls-dot"></span><div><b>Split into pages</b><span>Each PDF page becomes a high-resolution image</span></div></li>
-          <li data-stage="preprocess"><span class="ls-dot"></span><div><b>Clean the image</b><span>Optional: grayscale, threshold, straighten</span></div></li>
+          <li data-stage="preprocess"><span class="ls-dot"></span><div><b>Enhance the image</b><span>Remove rules, shadows and colour; straighten</span></div></li>
           <li data-stage="ocr"><span class="ls-dot"></span><div><b>Read the handwriting</b><span>Tesseract OCR turns pixels into characters</span></div></li>
           <li data-stage="ner"><span class="ls-dot"></span><div><b>Find key details</b><span>Student ID, question no., marks, page no.</span></div></li>
           <li data-stage="assemble"><span class="ls-dot"></span><div><b>Build the record</b><span>Text + details + confidence, per page</span></div></li>
@@ -132,6 +142,10 @@
         <div class="card scan-card">
           <div class="card-head">
             <h3>Scanned page</h3>
+            <div class="segmented sm hidden" id="viewMode">
+              <button data-val="orig" class="on">Original</button>
+              <button data-val="enh">What OCR saw</button>
+            </div>
             <div class="zoom">
               <button class="icon-btn sm" id="zoomOut" aria-label="Zoom out">−</button>
               <span id="zoomVal">100%</span>
@@ -174,7 +188,7 @@
     <div class="hero">
       <p class="eyebrow">End-to-end pipeline</p>
       <h1>How a page goes from ink to data.</h1>
-      <p class="lede">Seven steps, each handled by one small Python file. Click a file name to open its code.</p>
+      <p class="lede">Each step is handled by one small Python file. Click a file name to open its code.</p>
     </div>
     <div id="pipelineSteps" class="pipeline"></div>
 
@@ -184,8 +198,10 @@
     <div class="callout">
       <div class="callout-icon">!</div>
       <div>
-        <b>Key finding from Week 5</b>
-        <p>Cleaning the image (adaptive thresholding + deskewing) was expected to help OCR, but on phone photos of ruled notebook pages it made accuracy <em>worse</em>. The thresholding thickens the ruled lines until they merge with the letters sitting on them. That's why “Clean image first” is off by default in this UI. Try it both ways on a sample and compare the CER.</p>
+        <b>What we learnt about accuracy</b>
+        <p><b>Week 5:</b> the original cleaning step (adaptive thresholding + deskewing) made OCR <em>worse</em> on phone photos of ruled notebook pages, because it thickens the ruled lines until they merge with the letters.</p>
+        <p><b>Week 7:</b> the new enhancement works <em>with</em> the photo instead: it reads only the red colour channel (so pink and red rules disappear), evens out lighting, and erases the remaining rules without hard black-and-white conversion. Average character error rate went from <b>42.6% to 18.9%</b> (neat handwriting 39.7% → 3.7%, cursive 45.5% → 34.1%) at about one second per page.</p>
+        <p><b>Also tested and rejected:</b> Microsoft TrOCR (similar accuracy, about 3-5 minutes per page on CPU), reading line by line (worse), and Tesseract's larger “best” model (no gain, twice as slow).</p>
       </div>
     </div>
   </section>

@@ -145,7 +145,7 @@ function setSteps(stage, opts, finished) {
   $$("#liveSteps li").forEach((li) => {
     const i = STAGE_ORDER.indexOf(li.dataset.stage);
     li.className = "";
-    if (li.dataset.stage === "preprocess" && opts && !opts.preprocess) { if (i <= idx || finished) li.className = "skipped"; return; }
+    if (li.dataset.stage === "preprocess" && opts && opts.enhance === "raw") { if (i <= idx || finished) li.className = "skipped"; return; }
     // OCR and NER run inside one digitize_page() call; light them together
     const effIdx = stage === "ocr" ? STAGE_ORDER.indexOf("ner") : idx;
     if (finished || i < idx) li.classList.add("done");
@@ -171,7 +171,8 @@ $("#runBtn").addEventListener("click", async () => {
   if (state.file) fd.append("file", state.file); else fd.append("sample", state.sample);
   fd.append("ner", segVal("nerMode"));
   fd.append("dpi", segVal("dpi"));
-  fd.append("preprocess", $("#preprocess").checked ? "true" : "false");
+  fd.append("enhance", segVal("enhance"));
+  fd.append("spell", $("#spell").checked ? "true" : "false");
   state.fileName = state.file ? state.file.name : state.sample;
 
   try {
@@ -222,7 +223,8 @@ function showResults(job) {
   state.current = 0;
   $("#results").classList.remove("hidden");
   const o = job.options;
-  $("#resultsFile").textContent = `${job.file} · ${o.improved_ner ? "Improved NER" : "spaCy NER"} · preprocessing ${o.preprocess ? "on" : "off"}`;
+  const enhanceName = { smart: "smart enhancement", raw: "no enhancement", legacy: "Week 1-2 threshold" }[o.enhance];
+  $("#resultsFile").textContent = `${job.file} · ${enhanceName} · ${o.improved_ner ? "improved NER" : "spaCy NER"}${o.spell ? " · spelling corrected" : ""}`;
 
   const avgConf = job.pages.reduce((s, p) => s + p.record.ocr_confidence, 0) / job.pages.length;
   const words = job.pages.reduce((s, p) => s + p.words, 0);
@@ -284,7 +286,10 @@ function renderPage() {
   const p = state.pages[state.current];
   const rec = p.record;
   state.zoom = 1; applyZoom();
-  $("#scanImg").src = p.image_url;
+  const vm = $("#viewMode");
+  vm.classList.toggle("hidden", !p.enhanced_url);
+  const showEnh = p.enhanced_url && $("#viewMode button.on").dataset.val === "enh";
+  $("#scanImg").src = showEnh ? p.enhanced_url : p.image_url;
 
   const txt = rec.answer_text || "(No text was recognised on this page.)";
   $("#pageText").innerHTML = $("#hlEntities").checked ? highlighted(txt, rec.entities_found) : esc(txt);
@@ -321,11 +326,17 @@ function renderPage() {
 function scoreHtml(s) {
   const cls = (v) => (v <= 0.15 ? "good" : v <= 0.4 ? "mid" : "bad");
   return `<div class="score-row">
-    <div class="score ${cls(s.cer)}"><div class="k">CER · character errors</div><div class="v">${(s.cer * 100).toFixed(1)}%</div><div class="small muted">≈ ${Math.round((1 - Math.min(s.cer, 1)) * 100)}% characters right</div></div>
-    <div class="score ${cls(s.wer)}"><div class="k">WER · word errors</div><div class="v">${(s.wer * 100).toFixed(1)}%</div><div class="small muted">≈ ${Math.round((1 - Math.min(s.wer, 1)) * 100)}% words right</div></div></div>`;
+    <div class="score ${cls(s.cer)}"><div class="k">CER · character errors</div><div class="v">${(s.cer * 100).toFixed(1)}%</div><div class="small muted">character edits needed ÷ true length</div></div>
+    <div class="score ${cls(s.wer)}"><div class="k">WER · word errors</div><div class="v">${(s.wer * 100).toFixed(1)}%</div><div class="small muted">word edits needed ÷ true word count; one wrong letter makes a whole word wrong</div></div></div>`;
 }
 
 $("#hlEntities").addEventListener("change", () => state.pages.length && renderPage());
+$("#viewMode").addEventListener("click", (e) => {
+  const p = state.pages[state.current];
+  if (!e.target.closest("button") || !p?.enhanced_url) return;
+  // .segmented's own handler has already moved the "on" class
+  setTimeout(() => { $("#scanImg").src = segVal("viewMode") === "enh" ? p.enhanced_url : p.image_url; });
+});
 $("#outTabs").addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b) return;
@@ -362,20 +373,35 @@ const PIPELINE = [
     tech: ["PyMuPDF renders each PDF page at 300 DPI (dots per inch), so small handwriting stays sharp.", "Photos skip this step and go straight through.", "Up to 40 pages per upload."],
   },
   {
-    title: "Clean the image", optional: true,
-    plain: "Like photocopying with high contrast: the page is made black-and-white, smoothed, and straightened if it was photographed at an angle. In our tests this actually hurt accuracy on phone photos, so it is optional.",
-    input: "Colour page image", output: "Black & white, straightened image",
-    files: ["src/preprocess.py"],
-    tech: ["Convert to grayscale (cv2.cvtColor).", "Gaussian blur (5×5) to remove speckle noise.", "Adaptive Gaussian threshold (block 31, C 15) turns each pixel black or white based on its neighbourhood.", "Deskew: find the angle of the ink with cv2.minAreaRect and rotate the page back to level."],
-    example: "Week 5 finding: thresholding fattens the ruled notebook lines\nuntil they touch the letters, so Tesseract reads them as strokes.",
+    title: "Enhance the image",
+    plain: "Phone photos of notebook pages have pink margins, ruled lines, shadows and a slight tilt, and all of these confuse OCR. This step strips them away while leaving the pen strokes untouched, so the page looks more like clean print.",
+    input: "Colour page photo", output: "Clean, straight grayscale page",
+    files: ["src/ocr_pipeline.py", "src/preprocess.py"],
+    tech: [
+      "Red colour channel only: pink and red rules turn white, while blue and black ink stays dark.",
+      "Lighting correction: divide by a heavily blurred copy of the page to remove shadows and gradients.",
+      "Straighten: measure the angle of the ruled lines (Hough transform) and rotate them level.",
+      "Erase ruled lines: find long thin horizontal lines and paint only their faint pixels white, keeping dark ink that crosses them.",
+      "Upscale 1.5× so strokes are closer to the size Tesseract's model expects.",
+      "Replaces the Week 1-2 preprocess.py (hard black/white threshold), which Week 5 showed hurt accuracy. It is still selectable in the UI for comparison.",
+    ],
+    example: "Character error rate before → after this step:\n  neat handwriting  39.7% → 3.7%\n  cursive           45.5% → 34.1%",
   },
   {
     title: "Read the handwriting (OCR)",
-    plain: "Tesseract looks at the picture and guesses which letters are written where, producing plain text. It also tells us how sure it is about every word, which becomes a 0-100% confidence score for the page.",
-    input: "Page image", output: "Raw text + confidence score",
-    files: ["src/baseline_ocr.py", "src/digitizer.py"],
-    tech: ["pytesseract.image_to_string() gives the full text.", "pytesseract.image_to_data() gives every word with a 0-100 confidence; we average them and divide by 100.", "Tesseract is trained mostly on print, so messy handwriting lowers confidence."],
+    plain: "Tesseract looks at the cleaned picture and works out which letters are written where, producing plain text. It also reports how sure it is about every word, which becomes a 0-100% confidence score for the page.",
+    input: "Enhanced page image", output: "Raw text + confidence score",
+    files: ["src/ocr_pipeline.py", "src/digitizer.py"],
+    tech: ["One pytesseract.image_to_data() pass gives every word, its line and its confidence. The text is rebuilt from it, so OCR runs only once.", "Page segmentation mode 4: a single column of text of varying sizes.", "Confidence = average word confidence ÷ 100.", "Tesseract is trained mostly on print, so cursive still lowers accuracy."],
     example: 'Scan: "Q1. OSI Model in Email Sending"\nOCR:  "QL OS! Model in Email Sending"',
+  },
+  {
+    title: "Clean up the text",
+    plain: "Leftover bits of ruled lines show up as “____”, “—” or “|”, so these are removed. Optionally, a spell checker can fix words OCR got slightly wrong, like “protess” → “process”.",
+    input: "Raw OCR text", output: "Clean text",
+    files: ["src/ocr_pipeline.py"],
+    tech: ["Regex removes runs of _ — – ~ and stray | characters at line edges.", "Spelling (optional, off by default): pyspellchecker with edit distance 1-2. Prefers words that already appear correctly elsewhere on the same page.", "Never changes capitalised words (names), ALL-CAPS terms (SMTP) or anything with digits.", "Entities are always found before spelling correction, so IDs can't be altered.", "Off by default because it would also 'fix' the student's own spelling mistakes."],
+    example: 'OCR:        "with ___ opeific tespon sihilities in dako"\nCleaned:    "with opeific tespon sihilities in dako"',
   },
   {
     title: "Split by question",
@@ -389,7 +415,7 @@ const PIPELINE = [
     plain: "Named Entity Recognition: pick out the important facts in the text, namely the Student ID, Question number, Marks and Page number. The improved version also fixes common OCR mix-ups, like reading the digit 0 as the letter O.",
     input: "Raw text", output: "Student ID, Question, Marks, Page",
     files: ["src/ner_extractor.py", "src/ner_improved.py"],
-    tech: ["Week 3: spaCy EntityRuler with token patterns (e.g. ^[0-9]{2}[A-Za-z][0-9]{3,4}$ for IDs like 23D001).", "Week 4: pure regex that allows look-alike characters, then repairs them: O→0, l→1, I→1, S→5, B→8.", "Every candidate is kept; the earliest one on the page wins for each label.", "A real digit is required in IDs so normal words like “Roll” are never mistaken for one."],
+    tech: ["Week 3: spaCy EntityRuler with token patterns (e.g. ^[0-9]{2}[A-Za-z][0-9]{3,4}$ for IDs like 23D001).", "Week 4: pure regex that allows look-alike characters, then repairs them: O→0, D→0, l/I/L→1, S→5, B→8, Z→2.", "Week 7: an ID right after “Roll no”, “ID” or “Reg no” is accepted even with no real digit (“EO13” → E013).", "Week 7: “QL.” → Q1, and “@1)” at the start of a line → Q1 (a handwritten Q is often read as @).", "Week 7: dates like 5/11/2024 are no longer mistaken for marks “5/11”.", "Every candidate is kept; the earliest one on the page wins for each label."],
     example: 'OCR text:  "23DOO1 Q3 ... Marks 7/1O"\nCleaned:   STUDENT_ID=23D001  QUESTION_NUM=Q3  MARKS=7/10',
   },
   {
@@ -397,7 +423,7 @@ const PIPELINE = [
     plain: "Everything is put into one tidy, predictable record per page that any other program can read. Group 2's AI Exam Grader takes this as its input.",
     input: "Text + entities + confidence", output: "JSON record",
     files: ["src/digitizer.py"],
-    tech: ["One public function: digitize_page(image_path, page_number=None, use_improved_ner=True).", "Returns student_id, question, answer_text, page, marks_detected, ocr_confidence, entities_found.", "The spaCy model is loaded once and reused across pages."],
+    tech: ["One public function: digitize_page(image_path, page_number=None, use_improved_ner=True, enhance=True, spell_correct=False).", "Returns student_id, question, answer_text, page, marks_detected, ocr_confidence, entities_found.", "The spaCy model is loaded once and reused across pages."],
     example: '{ "student_id": "E007", "question": "Q1",\n  "answer_text": "...", "ocr_confidence": 0.54, ... }',
   },
   {
@@ -405,7 +431,7 @@ const PIPELINE = [
     plain: "To know if the system is any good, we compare its output with text typed by hand (the ground truth). We count how many characters and words are wrong, and how many entities were found correctly.",
     input: "OCR output + ground truth", output: "CER, WER, Precision, Recall, F1",
     files: ["src/evaluate.py", "src/evaluate_ner.py", "src/compare_ner_approaches.py"],
-    tech: ["CER (character error rate) and WER (word error rate) via jiwer. Lower is better.", "NER precision / recall / F1 on labelled examples.", "compare_ner_approaches.py scores Week 3 vs Week 4 NER side by side."],
+    tech: ["CER (character error rate) and WER (word error rate) via jiwer. Lower is better.", "evaluate.py scores both the original and the Week 7 enhanced OCR.", "NER precision / recall / F1 on labelled examples, plus a Week 7 set of real OCR mistakes.", "compare_ner_approaches.py scores Week 3 vs Week 4 NER side by side."],
   },
 ];
 
@@ -415,7 +441,8 @@ const TIMELINE = [
   { w: "Week 4", t: "Noise-tolerant NER", d: "Regex that repairs OCR look-alikes and keeps every candidate. Compared against Week 3." },
   { w: "Week 5", t: "Real-data evaluation", d: "Ran on real photographed answer sheets. Found that preprocessing hurt accuracy." },
   { w: "Week 6", t: "Reusable asset", d: "Whole pipeline wrapped as digitize_page() for other groups to import." },
-  { w: "Now", t: "Web interface", d: "This UI: upload PDFs, watch the pipeline run, read the code." },
+  { w: "Web UI", t: "Web interface", d: "This UI: upload PDFs, watch the pipeline run, read the code." },
+  { w: "Week 7", t: "Accuracy boost", d: "Smart image enhancement and text clean-up: average CER 42.6% → 18.9%. Smarter NER for real OCR mistakes." },
 ];
 
 $("#pipelineSteps").innerHTML = PIPELINE.map((s, i) => `
@@ -442,17 +469,23 @@ const FLOWS = {
   A(["Upload PDF or photo"]) --> B{"Is it a PDF?"}
   B -- "yes" --> C["Render every page to an image<br/><small>PyMuPDF · 300 DPI</small>"]
   B -- "no" --> D["Use the photo as-is"]
-  C --> E{"Clean image first?"}
+  C --> E{"Image enhancement?"}
   D --> E
-  E -- "yes" --> F["Grayscale → blur → threshold → deskew<br/><small>preprocess.py · OpenCV</small>"]
-  E -- "no (default)" --> G
+  E -- "Smart (default)" --> F["Red channel → even lighting → straighten<br/>→ erase ruled lines → upscale 1.5×<br/><small>ocr_pipeline.py · OpenCV</small>"]
+  E -- "Week 1-2" --> F2["Threshold + deskew<br/><small>preprocess.py</small>"]
+  E -- "None" --> G
   F --> G["Read text with Tesseract OCR<br/><small>text + per-word confidence</small>"]
-  G --> H{"Which entity finder?"}
+  F2 --> G
+  G --> CL["Remove rule debris ____ — |<br/><small>ocr_pipeline.py</small>"]
+  CL --> H{"Which entity finder?"}
   H -- "Improved" --> I["Regex + fix OCR look-alikes<br/><small>ner_improved.py</small>"]
   H -- "Baseline" --> J["spaCy EntityRuler patterns<br/><small>ner_extractor.py</small>"]
   I --> K["Pick the first candidate per label"]
   J --> K
-  K --> L[["Structured record per page<br/><small>digitize_page() · digitizer.py</small>"]]
+  K --> SP{"Auto-correct spelling?"}
+  SP -- "yes" --> SC["pyspellchecker on answer text<br/><small>names, IDs and acronyms untouched</small>"]
+  SP -- "no (default)" --> L
+  SC --> L[["Structured record per page<br/><small>digitize_page() · digitizer.py</small>"]]
   L --> M(["Shown in UI · download .txt / .json"])
   L --> N(["Group 2: AI Exam Grader"])`,
   },
@@ -588,12 +621,13 @@ const STACK = [
     group: "Core pipeline", blurb: "The tools that actually turn a picture into structured text.",
     items: [
       { n: "Python 3", what: "Programming language", mono: "Py", c: "#3572A5", use: "Every part of the project is written in Python, chosen for its NLP and computer-vision libraries.", pts: ["Glue between OCR, NER and evaluation", "Each step is a small, importable module"], files: ["src/digitizer.py"] },
-      { n: "Tesseract OCR 5", what: "Open-source text recognition engine (Google)", mono: "Tz", c: "#0f766e", use: "The engine that reads the characters off the page image.", pts: ["Returns the page text", "Returns a confidence (0-100) for every word, which we average into ocr_confidence"], files: ["src/baseline_ocr.py", "src/digitizer.py", "src/segment.py"] },
+      { n: "Tesseract OCR 5", what: "Open-source text recognition engine (Google)", mono: "Tz", c: "#0f766e", use: "The engine that reads the characters off the page image. Chosen over TrOCR, which was no more accurate here and took minutes per page on CPU.", pts: ["LSTM model, page segmentation mode 4", "Returns every word with a confidence (0-100), averaged into ocr_confidence"], files: ["src/ocr_pipeline.py", "src/baseline_ocr.py", "src/segment.py"] },
       { n: "pytesseract", what: "Python wrapper for Tesseract", mono: "pT", c: "#14b8a6", use: "Lets Python call the Tesseract program and get results back as strings or dictionaries.", pts: ["image_to_string(): full text", "image_to_data(): words, positions, confidences"], files: ["src/digitizer.py", "src/evaluate.py"] },
-      { n: "OpenCV", what: "Computer-vision library (cv2)", mono: "CV", c: "#5c3ee8", use: "Cleans up the scanned image before OCR.", pts: ["Grayscale + Gaussian blur", "Adaptive threshold to black & white", "Deskew using minAreaRect + warpAffine"], files: ["src/preprocess.py"] },
+      { n: "OpenCV", what: "Computer-vision library (cv2)", mono: "CV", c: "#5c3ee8", use: "Prepares the page photo before OCR.", pts: ["Week 7: red channel, lighting correction (divide by blurred background)", "Ruled-line detection with morphology + Hough transform, used to straighten the page and erase rules", "Week 1-2: Gaussian blur, adaptive threshold, minAreaRect deskew"], files: ["src/ocr_pipeline.py", "src/preprocess.py"] },
       { n: "Pillow (PIL)", what: "Image loading library", mono: "PIL", c: "#a16207", use: "Opens image files so they can be passed to Tesseract.", pts: ["Image.open() for JPG / PNG"], files: ["src/digitizer.py", "src/baseline_ocr.py"] },
       { n: "spaCy", what: "Industrial NLP library + en_core_web_sm", mono: "sp", c: "#09a3d5", use: "The Week 3 entity finder. An EntityRuler adds our own patterns in front of spaCy's statistical NER.", pts: ["Token-level regex patterns for STUDENT_ID, QUESTION_NUM, MARKS, PAGE_NUM", "Model loaded once and cached"], files: ["src/ner_extractor.py"] },
-      { n: "Python re (regex)", what: "Built-in pattern matching", mono: ".*", c: "#475569", use: "Powers the Week 4 improved NER and question segmentation.", pts: ["Allows look-alike characters (O, l, I, S, B) where digits are expected", "Then repairs them to real digits"], files: ["src/ner_improved.py", "src/segment.py"] },
+      { n: "pyspellchecker", what: "Dictionary spell checker (Peter Norvig's method)", mono: "abc", c: "#0e7490", use: "Optional clean-up that fixes OCR slips in ordinary words.", pts: ["Edit distance 1-2 candidates ranked by word frequency", "Boosts words already used correctly on the same page", "Off by default to preserve the student's own spelling"], files: ["src/ocr_pipeline.py"] },
+      { n: "Python re (regex)", what: "Built-in pattern matching", mono: ".*", c: "#475569", use: "Powers the improved NER, question segmentation and text clean-up.", pts: ["Allows look-alike characters (O, l, I, S, B) where digits are expected", "Then repairs them to real digits"], files: ["src/ner_improved.py", "src/segment.py"] },
     ],
   },
   {

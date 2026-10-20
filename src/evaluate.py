@@ -3,6 +3,7 @@ import os
 import jiwer
 import pytesseract
 from PIL import Image
+from ocr_pipeline import ocr_page
 
 
 def load_ground_truth_text(ground_truth_folder, filename):
@@ -14,13 +15,16 @@ def load_ground_truth_text(ground_truth_folder, filename):
     return combined
 
 
-def run_ocr(image_path):
-    img = Image.open(image_path)
-    raw_text = pytesseract.image_to_string(img)
+def run_ocr(image_path, enhance=False):
+    if enhance:
+        raw_text, _ = ocr_page(image_path, enhance=True)
+    else:
+        img = Image.open(image_path)
+        raw_text = pytesseract.image_to_string(img)
     return " ".join(raw_text.split())
 
 
-def evaluate_folder(image_folder, ground_truth_folder):
+def evaluate_folder(image_folder, ground_truth_folder, enhance=False):
     results = []
 
     for filename in sorted(os.listdir(image_folder)):
@@ -28,7 +32,7 @@ def evaluate_folder(image_folder, ground_truth_folder):
             continue
 
         image_path = os.path.join(image_folder, filename)
-        predicted_text = run_ocr(image_path)
+        predicted_text = run_ocr(image_path, enhance=enhance)
 
         try:
             ground_truth_text = load_ground_truth_text(ground_truth_folder, filename)
@@ -59,3 +63,6 @@ def evaluate_folder(image_folder, ground_truth_folder):
 if __name__ == "__main__":
     print("evaluating raw scans (no preprocessing)")
     evaluate_folder("data/raw_scans", "data/ground_truth")
+
+    print("\nevaluating raw scans with week 7 enhancement (ocr_pipeline.py)")
+    evaluate_folder("data/raw_scans", "data/ground_truth", enhance=True)

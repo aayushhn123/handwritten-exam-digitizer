@@ -53,6 +53,7 @@ def _configure_tesseract():
 TESSERACT_PATH = _configure_tesseract()
 
 from digitizer import digitize_page  # noqa: E402
+from ocr_pipeline import enhance_page  # noqa: E402
 from preprocess import preprocess_image  # noqa: E402
 
 app = Flask(__name__)
@@ -83,14 +84,15 @@ DESCRIPTIONS = {
     "data/ground_truth/aayush_page-01.json": "Manually transcribed text for Aayush's page 1 (student E007). The answer key for evaluation.",
     "data/ground_truth/rish_page-1.json": "Manually transcribed text for Rish's page 1. The answer key for evaluation.",
     "src": "The heart of the project: every step of the pipeline as small, separate Python files.",
-    "src/preprocess.py": "Step 1 - Cleans an image: grayscale, blur, black/white threshold and straightening (deskew). Uses OpenCV.",
+    "src/preprocess.py": "Week 1-2 image cleaning (grayscale, blur, black/white threshold, deskew). Replaced by ocr_pipeline.py after Week 5 showed it hurt accuracy.",
     "src/segment.py": "Splits a page into question-wise chunks by spotting words like 'Q1', 'Q2' in the OCR output.",
     "src/baseline_ocr.py": "Step 2 - Runs Tesseract OCR on an image and returns the text plus an average confidence score.",
     "src/ner_extractor.py": "Step 3 (v1) - Finds Student ID, Question no., Marks and Page no. using spaCy pattern rules.",
     "src/ner_improved.py": "Step 3 (v2) - Smarter finder that tolerates OCR mistakes like 'O' instead of '0' and keeps every candidate.",
     "src/process_with_ner.py": "Early glue code (Week 3): OCR + spaCy NER on one page, combined into one record.",
     "src/digitizer.py": "THE reusable asset. One function, digitize_page(), runs OCR + NER and returns a clean structured record.",
-    "src/evaluate.py": "Measures OCR quality: compares Tesseract output with ground truth using CER and WER (jiwer).",
+    "src/ocr_pipeline.py": "Week 7 - Smarter OCR: removes coloured rules, shadows and ruled lines, straightens the page, then cleans the text. Cut errors from 43% to 19%.",
+    "src/evaluate.py": "Measures OCR quality: CER and WER against ground truth (jiwer), for the original and the Week 7 enhanced OCR.",
     "src/evaluate_ner.py": "Measures NER quality (precision, recall, F1) on small labelled examples.",
     "src/compare_ner_approaches.py": "Side-by-side scorecard: Week 3 spaCy NER vs Week 4 improved NER.",
     "results": "Where evaluation outputs are saved.",
@@ -205,30 +207,41 @@ def _run_job(job_id, input_path, original_name, options):
         for idx, img_path in enumerate(page_images, start=1):
             _update(job_id, page=idx)
             ocr_input = img_path
+            enhanced_name = None
             pre_ms = 0
+            mode = options["enhance"]
 
-            if options["preprocess"]:
+            if mode == "smart":
+                # save what Tesseract will actually see, for the preview toggle
+                _update(job_id, stage="preprocess")
+                t1 = time.time()
+                enhanced_name = f"page_{idx:03d}_enhanced.png"
+                cv2.imwrite(str(job_dir / enhanced_name), enhance_page(str(img_path)))
+                pre_ms = int((time.time() - t1) * 1000)
+                _log(job_id, f"Page {idx}: enhanced (red channel, lighting, straighten, rules erased) ({pre_ms} ms)")
+            elif mode == "legacy":
                 _update(job_id, stage="preprocess")
                 t1 = time.time()
                 cleaned = preprocess_image(str(img_path))
                 ocr_input = job_dir / f"page_{idx:03d}_clean.png"
                 cv2.imwrite(str(ocr_input), cleaned)
+                enhanced_name = ocr_input.name
                 pre_ms = int((time.time() - t1) * 1000)
-                _log(job_id, f"Page {idx}: cleaned with preprocess.py ({pre_ms} ms)")
+                _log(job_id, f"Page {idx}: cleaned with Week 1-2 preprocess.py ({pre_ms} ms)")
 
             _update(job_id, stage="ocr")
             t2 = time.time()
-            record = digitize_page(str(ocr_input), page_number=idx, use_improved_ner=options["improved_ner"])
+            record = digitize_page(str(ocr_input), page_number=idx, use_improved_ner=options["improved_ner"],
+                                   enhance=(mode == "smart"), spell_correct=options["spell"])
             dig_ms = int((time.time() - t2) * 1000)
             _log(job_id, f"Page {idx}: OCR + NER done - confidence {int(record['ocr_confidence'] * 100)}%, "
                          f"{len(record['entities_found'])} entit{'y' if len(record['entities_found']) == 1 else 'ies'} ({dig_ms} ms)")
 
-            preview_name = ocr_input.name
-            h, w = cv2.imread(str(ocr_input), cv2.IMREAD_GRAYSCALE).shape[:2]
+            h, w = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE).shape[:2]
             page = {
                 "page": idx,
-                "image_url": f"/api/jobs/{job_id}/image/{preview_name}",
-                "original_url": f"/api/jobs/{job_id}/image/{img_path.name}",
+                "image_url": f"/api/jobs/{job_id}/image/{img_path.name}",
+                "enhanced_url": f"/api/jobs/{job_id}/image/{enhanced_name}" if enhanced_name else None,
                 "width": w,
                 "height": h,
                 "record": record,
@@ -303,7 +316,8 @@ def _options_from(form):
     dpi = int(form.get("dpi", 300))
     return {
         "improved_ner": form.get("ner", "improved") == "improved",
-        "preprocess": form.get("preprocess", "false") == "true",
+        "enhance": form.get("enhance", "smart") if form.get("enhance") in ("smart", "raw", "legacy") else "smart",
+        "spell": form.get("spell", "false") == "true",
         "dpi": max(100, min(dpi, 400)),
     }
 
