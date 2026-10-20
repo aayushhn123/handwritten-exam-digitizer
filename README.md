@@ -46,6 +46,10 @@ handwritten-exam-digitizer/
     compare_ner_approaches.py   baseline vs improved NER comparison            (Week 4)
     digitizer.py                 reusable digitize_page() asset                (Week 6, new)
   results/                   evaluation outputs
+  app/                       web UI (Flask server + HTML/CSS/JS)
+    server.py                 upload, PDF -> page images, calls digitize_page()
+    templates/index.html      page layout and tabs
+    static/                   styles and scripts
   requirements.txt
 ```
 
@@ -68,6 +72,34 @@ Evaluate OCR quality against ground truth:
 cd src
 python evaluate.py
 ```
+
+## Web UI
+
+A local web interface for trying the pipeline without writing code:
+
+```
+python app/server.py
+```
+
+Then open http://127.0.0.1:5000. It has five tabs:
+
+- **Digitize**: upload a scanned PDF or a photo (or pick a sample from
+  `data/raw_scans/`), watch each pipeline step run, then read the text with
+  detected entities highlighted. You can download `.txt` / `.json`, and see
+  CER/WER automatically when ground truth exists (or paste your own).
+- **How it works**: each pipeline step in plain language, with technical
+  details and links to the code.
+- **Flowcharts**: end-to-end flow, inside `digitize_page()`, improved NER
+  logic, web request flow, and evaluation flow.
+- **Tech stack**: what each library is and what it does in this project.
+- **Architecture**: the folder tree with descriptions and an in-browser
+  code viewer with syntax highlighting.
+
+On Windows, install Tesseract with
+`winget install UB-Mannheim.TesseractOCR`. The server finds it in
+`C:\Program Files\Tesseract-OCR` automatically, or set `TESSERACT_CMD`.
+The UI loads fonts, highlight.js, marked and Mermaid from CDNs, so the
+diagrams and code colouring need an internet connection.
 
 ## Week 5 — Evaluation and error analysis
 

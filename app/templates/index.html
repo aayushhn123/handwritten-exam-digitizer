@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Exam Digitizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link id="hljs-light" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  <link id="hljs-dark" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" disabled>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M5 4h10l4 4v12H5z" /><path d="M8 11c1.5-1.5 2.5 1.5 4 0s2.5 1.5 4 0M8 15h8" /></svg>
+      </div>
+      <div>
+        <div class="brand-name">Exam Digitizer</div>
+        <div class="brand-sub">Handwritten answer sheets → structured text</div>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="digitize" role="tab">Digitize</button>
+      <button class="tab" data-tab="pipeline" role="tab">How it works</button>
+      <button class="tab" data-tab="flow" role="tab">Flowcharts</button>
+      <button class="tab" data-tab="stack" role="tab">Tech stack</button>
+      <button class="tab" data-tab="arch" role="tab">Architecture</button>
+    </nav>
+    <div class="topbar-right">
+      <span id="health" class="health"><span class="dot"></span><span class="health-text">Checking OCR…</span></span>
+      <button id="themeToggle" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">
+        <svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- ======================= DIGITIZE ======================= -->
+  <section id="tab-digitize" class="panel active">
+    <div class="hero">
+      <p class="eyebrow">SNLP Project · Group 1</p>
+      <h1>Turn a handwritten answer sheet into text.</h1>
+      <p class="lede">Drop in a scanned PDF or a photo of an assignment. Each page is read with OCR, key details like student ID and question number are picked out, and you get clean, copyable text.</p>
+    </div>
+
+    <div class="grid-2">
+      <div class="card upload-card">
+        <label id="dropzone" class="dropzone" for="fileInput">
+          <input id="fileInput" type="file" accept=".pdf,.jpg,.jpeg,.png,.bmp,.tif,.tiff,.webp" hidden>
+          <div class="dz-icon"><svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg></div>
+          <div class="dz-title">Drop a PDF or image here</div>
+          <div class="dz-sub">or <span class="link">browse files</span> · PDF, JPG, PNG · up to 60 MB</div>
+          <div id="fileChip" class="file-chip hidden"></div>
+        </label>
+
+        <div class="samples">
+          <div class="samples-head">Or try a sample used in training</div>
+          <div id="sampleList" class="sample-list"></div>
+        </div>
+
+        <details class="options" open>
+          <summary>Options</summary>
+          <div class="opt-row">
+            <div class="opt-label">Entity finder <span class="hint" title="How the student ID, question number and marks are detected">?</span></div>
+            <div class="segmented" id="nerMode">
+              <button data-val="improved" class="on">Improved (Week 4)</button>
+              <button data-val="baseline">spaCy rules (Week 3)</button>
+            </div>
+          </div>
+          <div class="opt-row">
+            <div class="opt-label">Clean image first
+              <div class="opt-note">Our Week 5 tests found this <em>hurts</em> accuracy on phone photos of ruled paper. Off by default.</div>
+            </div>
+            <label class="switch"><input type="checkbox" id="preprocess"><span></span></label>
+          </div>
+          <div class="opt-row">
+            <div class="opt-label">PDF render quality</div>
+            <div class="segmented" id="dpi">
+              <button data-val="200">Fast · 200 DPI</button>
+              <button data-val="300" class="on">Best · 300 DPI</button>
+            </div>
+          </div>
+        </details>
+
+        <button id="runBtn" class="btn-primary" disabled>
+          <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          Digitize
+        </button>
+      </div>
+
+      <div class="card progress-card">
+        <div class="card-head">
+          <h3>Pipeline</h3>
+          <span id="progressLabel" class="muted small">Waiting for a file</span>
+        </div>
+        <ol id="liveSteps" class="live-steps">
+          <li data-stage="upload"><span class="ls-dot"></span><div><b>Upload</b><span>Your file is sent to the local server</span></div></li>
+          <li data-stage="render"><span class="ls-dot"></span><div><b>Split into pages</b><span>Each PDF page becomes a high-resolution image</span></div></li>
+          <li data-stage="preprocess"><span class="ls-dot"></span><div><b>Clean the image</b><span>Optional: grayscale, threshold, straighten</span></div></li>
+          <li data-stage="ocr"><span class="ls-dot"></span><div><b>Read the handwriting</b><span>Tesseract OCR turns pixels into characters</span></div></li>
+          <li data-stage="ner"><span class="ls-dot"></span><div><b>Find key details</b><span>Student ID, question no., marks, page no.</span></div></li>
+          <li data-stage="assemble"><span class="ls-dot"></span><div><b>Build the record</b><span>Text + details + confidence, per page</span></div></li>
+        </ol>
+        <div class="progress-bar"><div id="progressFill"></div></div>
+        <div id="liveLog" class="live-log"><div class="muted">Activity will appear here.</div></div>
+      </div>
+    </div>
+
+    <!-- results -->
+    <div id="results" class="results hidden">
+      <div class="results-head">
+        <div>
+          <h2>Digitized output</h2>
+          <div id="resultsFile" class="muted"></div>
+        </div>
+        <div class="toolbar">
+          <button class="btn-ghost" id="copyAll"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg>Copy all text</button>
+          <button class="btn-ghost" id="dlTxt"><svg viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg>.txt</button>
+          <button class="btn-ghost" id="dlJson"><svg viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg>.json</button>
+        </div>
+      </div>
+
+      <div id="stats" class="stats"></div>
+      <div id="pageNav" class="page-nav"></div>
+
+      <div class="page-view">
+        <div class="card scan-card">
+          <div class="card-head">
+            <h3>Scanned page</h3>
+            <div class="zoom">
+              <button class="icon-btn sm" id="zoomOut" aria-label="Zoom out">−</button>
+              <span id="zoomVal">100%</span>
+              <button class="icon-btn sm" id="zoomIn" aria-label="Zoom in">+</button>
+            </div>
+          </div>
+          <div class="scan-wrap"><img id="scanImg" alt="Scanned page"></div>
+        </div>
+
+        <div class="card text-card">
+          <div class="subtabs" id="outTabs">
+            <button class="on" data-out="text">Text</button>
+            <button data-out="details">Detected details</button>
+            <button data-out="json">JSON record</button>
+            <button data-out="accuracy">Accuracy check</button>
+          </div>
+          <div class="out out-text on">
+            <div class="out-tools">
+              <label class="check"><input type="checkbox" id="hlEntities" checked> Highlight detected entities</label>
+              <button class="btn-ghost sm" id="copyPage">Copy page</button>
+            </div>
+            <pre id="pageText" class="page-text"></pre>
+          </div>
+          <div class="out out-details"><div id="details"></div></div>
+          <div class="out out-json"><pre class="code-block"><code id="pageJson" class="language-json"></code></pre></div>
+          <div class="out out-accuracy">
+            <p class="muted small">Paste the correct (hand-typed) text for this page to measure how close the OCR got. Lower is better: <b>CER</b> = character error rate, <b>WER</b> = word error rate.</p>
+            <div id="autoAccuracy"></div>
+            <textarea id="refText" placeholder="Paste the true text of this page here…"></textarea>
+            <button class="btn-primary sm" id="scoreBtn">Calculate CER / WER</button>
+            <div id="scoreOut"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= PIPELINE ======================= -->
+  <section id="tab-pipeline" class="panel">
+    <div class="hero">
+      <p class="eyebrow">End-to-end pipeline</p>
+      <h1>How a page goes from ink to data.</h1>
+      <p class="lede">Seven steps, each handled by one small Python file. Click a file name to open its code.</p>
+    </div>
+    <div id="pipelineSteps" class="pipeline"></div>
+
+    <h2 class="section-title">How the project evolved</h2>
+    <div id="timeline" class="timeline"></div>
+
+    <div class="callout">
+      <div class="callout-icon">!</div>
+      <div>
+        <b>Key finding from Week 5</b>
+        <p>Cleaning the image (adaptive thresholding + deskewing) was expected to help OCR, but on phone photos of ruled notebook pages it made accuracy <em>worse</em>. The thresholding thickens the ruled lines until they merge with the letters sitting on them. That's why “Clean image first” is off by default in this UI. Try it both ways on a sample and compare the CER.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= FLOWCHARTS ======================= -->
+  <section id="tab-flow" class="panel">
+    <div class="hero">
+      <p class="eyebrow">Flowcharts</p>
+      <h1>The system, drawn out.</h1>
+      <p class="lede">Pick a diagram. Each one zooms in on a different part of the system.</p>
+    </div>
+    <div class="pills" id="flowPills"></div>
+    <div class="card flow-card">
+      <div id="flowCaption" class="flow-caption"></div>
+      <div id="flowCanvas" class="flow-canvas"></div>
+    </div>
+  </section>
+
+  <!-- ======================= TECH STACK ======================= -->
+  <section id="tab-stack" class="panel">
+    <div class="hero">
+      <p class="eyebrow">Tech stack</p>
+      <h1>What each tool does here.</h1>
+      <p class="lede">Every library in the project, what it is in one line, and exactly which job it does in our pipeline.</p>
+    </div>
+    <div id="stackGroups"></div>
+  </section>
+
+  <!-- ======================= ARCHITECTURE ======================= -->
+  <section id="tab-arch" class="panel">
+    <div class="hero">
+      <p class="eyebrow">Project architecture</p>
+      <h1>How the code is organised.</h1>
+      <p class="lede">Four top-level areas. Browse the tree and click any file to read it, with syntax highlighting.</p>
+    </div>
+    <div id="layers" class="layers"></div>
+    <div class="arch">
+      <div class="card tree-card">
+        <div class="card-head"><h3>Files</h3><button class="btn-ghost sm" id="expandAll">Expand all</button></div>
+        <div id="tree" class="tree"></div>
+      </div>
+      <div class="card viewer-card">
+        <div class="viewer-head">
+          <div id="crumbs" class="crumbs">Select a file</div>
+          <button class="btn-ghost sm hidden" id="copyCode">Copy</button>
+        </div>
+        <div id="fileDesc" class="file-desc hidden"></div>
+        <div id="viewer" class="viewer">
+          <div class="empty">
+            <svg viewBox="0 0 24 24"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M9 13l-2 2 2 2M15 13l2 2-2 2"/></svg>
+            <p>Pick a file from the tree to view it here.<br><span class="muted">Try <a href="#" data-open="src/digitizer.py">src/digitizer.py</a>, the reusable asset.</span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">Handwritten Exam Digitizer · SNLP Course Project 2026 · Group 1 (E001, E002, E004, E005, E007) · runs locally, nothing leaves your machine</footer>
+
+<div id="toast" class="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

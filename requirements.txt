@@ -4,3 +4,5 @@ pillow
 jiwer
 scikit-learn
 spacy
+flask
+pymupdf
