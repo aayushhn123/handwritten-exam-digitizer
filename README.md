@@ -76,13 +76,19 @@ python evaluate.py
 
 ## Web UI
 
-A local web interface for trying the pipeline without writing code:
+A local web interface for trying the pipeline without writing code.
 
-```
-python app/server.py
-```
+On Windows, double-click:
 
-Then open http://127.0.0.1:5000. It has five tabs:
+- `start.bat`: starts the server in a minimised window and opens
+  http://127.0.0.1:5000 in your browser (if it is already running, it just
+  opens the browser)
+- `stop.bat`: stops the server
+
+You can also stop it with the power button at the top right of the UI.
+On any OS, `python app/server.py` starts it manually.
+
+It has five tabs:
 
 - **Digitize**: upload a scanned PDF or a photo (or pick a sample from
   `data/raw_scans/`), watch each pipeline step run, then read the text with

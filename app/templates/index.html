@@ -35,6 +35,9 @@
       <button id="themeToggle" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">
         <svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
       </button>
+      <button id="shutdownBtn" class="icon-btn danger" title="Shut down the server" aria-label="Shut down the server">
+        <svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg>
+      </button>
     </div>
   </div>
 </header>
@@ -263,6 +266,26 @@
 <footer class="foot">Handwritten Exam Digitizer · SNLP Course Project 2026 · Group 1 (E001, E002, E004, E005, E007) · runs locally, nothing leaves your machine</footer>
 
 <div id="toast" class="toast"></div>
+
+<div id="confirmShutdown" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="sdTitle">
+  <div class="modal-card">
+    <div class="modal-icon"><svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg></div>
+    <h3 id="sdTitle">Shut down Exam Digitizer?</h3>
+    <p>This stops the local server. Any digitizing in progress is cancelled. Download results you want to keep first.</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="sdCancel">Cancel</button>
+      <button class="btn-danger" id="sdConfirm">Shut down</button>
+    </div>
+  </div>
+</div>
+
+<div id="stoppedScreen" class="stopped hidden">
+  <div class="modal-card">
+    <div class="modal-icon off"><svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg></div>
+    <h3>Server stopped</h3>
+    <p>You can close this tab. To start again, double-click <code>start.bat</code> in the project folder.</p>
+  </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>

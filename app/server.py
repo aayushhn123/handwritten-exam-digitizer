@@ -415,6 +415,23 @@ def raw_file():
     return send_file(path)
 
 
+@app.route("/api/shutdown", methods=["POST"])
+def shutdown():
+    # The custom header can't be sent cross-origin without a CORS preflight
+    # (which this server never approves), so other websites open in the
+    # browser can't stop the server; only this page and stop.bat can.
+    if request.headers.get("X-Shutdown") != "1":
+        abort(403)
+
+    def _exit():
+        time.sleep(0.5)  # let the response reach the browser first
+        shutil.rmtree(WORK_DIR, ignore_errors=True)
+        os._exit(0)
+
+    threading.Thread(target=_exit, daemon=True).start()
+    return jsonify({"status": "shutting down"})
+
+
 if __name__ == "__main__":
     print("Tesseract:", TESSERACT_PATH or "NOT FOUND")
     print("Open http://127.0.0.1:5000")

@@ -88,6 +88,36 @@ fetch("/api/health").then((r) => r.json()).then((h) => {
   el.title = h.tesseract_path || "Install Tesseract OCR to enable digitizing";
 }).catch(() => {});
 
+/* ============================== shutdown ============================== */
+
+(function initShutdown() {
+  const modal = $("#confirmShutdown");
+  const close = () => modal.classList.add("hidden");
+  $("#shutdownBtn").addEventListener("click", () => { modal.classList.remove("hidden"); $("#sdCancel").focus(); });
+  $("#sdCancel").addEventListener("click", close);
+  modal.addEventListener("click", (e) => e.target === modal && close());
+  document.addEventListener("keydown", (e) => e.key === "Escape" && close());
+
+  $("#sdConfirm").addEventListener("click", async () => {
+    const btn = $("#sdConfirm");
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner"></span> Stopping…`;
+    try {
+      await fetch("/api/shutdown", { method: "POST", headers: { "X-Shutdown": "1" } });
+    } catch {}
+    // confirm it is really down before saying so
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 400));
+      try { await fetch("/api/health", { cache: "no-store" }); } catch { break; }
+    }
+    close();
+    $("#stoppedScreen").classList.remove("hidden");
+    const health = $("#health");
+    health.classList.remove("ok"); health.classList.add("bad");
+    $(".health-text", health).textContent = "Server stopped";
+  });
+})();
+
 /* ============================== upload ============================== */
 
 const state = { file: null, sample: null, job: null, pages: [], current: 0, zoom: 1, fileName: "" };

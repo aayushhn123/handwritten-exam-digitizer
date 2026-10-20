@@ -359,3 +359,18 @@ li:not(.collapsed) > .node .car { transform: rotate(90deg); }
 .segmented.sm button { padding: 4px 9px; font-size: 12px; }
 .card-head .segmented.sm { margin-left: auto; }
 .callout p + p { margin-top: 8px; }
+
+/* ---------- shutdown ---------- */
+.icon-btn.danger:hover { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); background: var(--bad-soft); }
+.modal, .stopped { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter: blur(6px); animation: fade .2s ease; }
+.stopped { background: var(--bg); }
+.modal-card { width: min(420px, 100%); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 20px 60px rgba(0,0,0,.18); padding: 24px; text-align: center; }
+.modal-card h3 { font-family: var(--display); font-size: 20px; margin-top: 12px; }
+.modal-card p { color: var(--ink-2); margin: 8px 0 0; }
+.modal-icon { width: 48px; height: 48px; border-radius: 50%; margin: 0 auto; display: grid; place-items: center; background: var(--bad-soft); color: var(--bad); }
+.modal-icon.off { background: var(--surface-2); color: var(--muted); }
+.modal-icon svg { width: 22px; height: 22px; }
+.modal-actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+.btn-danger { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border: 0; border-radius: 9px; background: var(--bad); color: #fff; font-weight: 600; font-size: 14px; }
+.btn-danger:hover { filter: brightness(1.08); }
+.btn-danger:disabled { opacity: .6; cursor: wait; }
